@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div id="container"></div>
+    <hr>
+    <h2>Agregar archivo</h2>
+    <input type="file" id="fileSelect" multiple>
+    <script>
+        document.addEventListener("DOMContentLoaded", async () => {
+            const $mainContainer = document.querySelector("#container");
+            const $fileSelect = document.querySelector("#fileSelect");
+            const directoryName = "pictures";
+            const opfsRoot = await navigator.storage.getDirectory();
+            const picturesFolder = await opfsRoot.getDirectoryHandle(directoryName, {
+                create: true,
+            });
+
+
+const removeFile = async (fileName, folder) => {
+    if (!('remove' in FileSystemFileHandle.prototype)) {
+        return alert("Tu navegador no soporta la eliminación de archivos");
+    }
+    if (!confirm('¿De verdad quieres eliminarlo?')) {
+        return;
+    }
+    const fileHandle = await folder.getFileHandle(fileName);
+    await fileHandle.remove();
+}
+
+const downloadFile = async (fileName, folder) => {
+    const fileHandle = await folder.getFileHandle(fileName);
+    const file = await fileHandle.getFile();
+    const a = document.createElement("a");
+    const objectUrl = URL.createObjectURL(file);
+    a.href = objectUrl;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+}
+
+const storeFile = async (file, folder) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async () => {
+            const fileName = file.name;
+            const fileHandle = await folder.getFileHandle(fileName, {
+                create: true,
+            });
+            const writable = await fileHandle.createWritable();
+            await writable.write(reader.result);
+            await writable.close();
+            resolve();
+        };
+        reader.onerror = error => {
+            reject(error);
+        }
+        reader.readAsArrayBuffer(file);
+    });
+}
+const renderFiles = async (folder) => {
+    while ($mainContainer.firstChild) {
+        $mainContainer.removeChild($mainContainer.firstChild);
+    }
+    for await (let [name, handle] of folder) {
+        const container = Object.assign(document.createElement("div"));
+        const anchorFileName = Object.assign(document.createElement("a"), {
+            textContent: name,
+            href: "javascript:void(0)",
+            classList: ["file"],
+        });
+        const anchorRemove = Object.assign(document.createElement("a"), {
+            textContent: "Eliminar",
+            href: "javascript:void(0)",
+            classList: ["remove"],
+        });
+        anchorFileName.addEventListener("click", () => {
+            downloadFile(name, folder);
+        });
+        anchorRemove.addEventListener("click", async () => {
+            await removeFile(name, folder);
+            await renderFiles(folder);
+        })
+        container.appendChild(anchorFileName);
+        container.appendChild(anchorRemove);
+        $mainContainer.append(container);
+    }
+};
+
+$fileSelect.addEventListener("change", async () => {
+    const files = $fileSelect.files;
+    for (const file of files) {
+        await storeFile(file, picturesFolder)
+    }
+    $fileSelect.value = "";
+    renderFiles(picturesFolder);
+});
+            renderFiles(picturesFolder);
+        });
+    </script>
+    <style>
+        a {
+            text-decoration: none;
+        }
+
+        a.file {
+            color: #0ea5e9;
+            font-size: 1.2rem;
+        }
+
+        a.remove {
+            color: #dc2626;
+            font-size: 0.8rem;
+            margin-left: 0.4rem;
+        }
+    </style>
+</body>
+
+</html>
